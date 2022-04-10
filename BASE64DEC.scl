@@ -1,0 +1,95 @@
+﻿FUNCTION "BASE64DEC" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      IN : String;
+   END_VAR
+
+   VAR_OUTPUT 
+      OUT : String;
+   END_VAR
+
+   VAR_TEMP 
+      base64chars : String;
+      encodedString : String;
+      decodedString : String;
+      paddingLength : Int;
+      codeBlock : DWord;
+      codeValue : Int;
+      i : Int;
+      j : Int;
+   END_VAR
+
+
+BEGIN
+	(*
+	
+	 ██████╗  █████╗ ███████╗███████╗ ██████╗ ██╗  ██╗              ██████╗ ██╗      ██████╗
+	 ██╔══██╗██╔══██╗██╔════╝██╔════╝██╔════╝ ██║  ██║              ██╔══██╗██║     ██╔════╝
+	 ██████╔╝███████║███████╗█████╗  ███████╗ ███████║    █████╗    ██████╔╝██║     ██║     
+	 ██╔══██╗██╔══██║╚════██║██╔══╝  ██╔═══██╗╚════██║    ╚════╝    ██╔═══╝ ██║     ██║     
+	 ██████╔╝██║  ██║███████║███████╗╚██████╔╝     ██║              ██║     ███████╗╚██████╗
+	 ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝      ╚═╝              ╚═╝     ╚══════╝ ╚═════╝
+	 
+	 MIT License
+	 
+	 Copyright (c) 2022 Jesse Schlüter (jesse@helix360.de)
+	 
+	 Permission is hereby granted, free OF charge, TO Any person obtaining a copy
+	 OF this software AND associated documentation files (the "Software"), TO deal
+	 in the Software without restriction, including without limitation the rights
+	 TO use, copy, modify, merge, publish, distribute, sublicense, AND/OR sell
+	 copies OF the software, AND TO permit persons TO whom the software is
+	 furnished TO DO so, subject TO the following conditions:
+	 
+	 the above copyright notice AND this permission notice shall be included in all
+	 copies OR substantial portions OF the software.
+	 
+	 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF Any KIND, EXPRESS OR
+	 IMPLIED, INCLUDING BUT NOT LIMITED TO the WARRANTIES OF MERCHANTABILITY,
+	 FITNESS FOR a PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR Any CLAIM, DAMAGES OR OTHER
+	 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	 OUT OF OR #IN CONNECTION WITH the software OR THE USE OR OTHER DEALINGS IN THE
+	 SOFTWARE. 
+	*)
+	
+	// initialize variables
+	#base64chars := 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	#paddingLength := 0;
+	
+	// loop through encoded string
+	FOR #i := 1 TO LEN(#IN) DO
+	    // remove any non base64 compliant characters (i.e. line breaks)
+	    IF FIND(IN1 := #base64chars, IN2 := #IN[#i]) > 0 THEN
+	        #encodedString := CONCAT(IN1 := #encodedString, IN2 := #IN[#i]);
+	    // replace incoming padding with zero padding
+	    ELSIF #IN[#i] = '=' THEN
+	        #encodedString := CONCAT(IN1 := #encodedString, IN2 := 'A'); // 'A' corresponds with 6-bit 0 values
+	        #paddingLength := #paddingLength + 1; // remember padding length
+	    END_IF;
+	END_FOR;
+	
+	// loop through the encoded string four characters at a time
+	FOR #i := 1 TO LEN(#encodedString) BY 4 DO
+	    // assemble the four encoded characters into a single 24-bit block
+	    #codeBlock := 0;
+	    FOR #j := 0 TO 3 DO
+	        // find the value of the encoded character
+	        // it corresponds to the position in the base character list
+	        #codeValue := FIND(IN1 := #base64chars, IN2 := #encodedString[#i + #j]) - 1;
+	        // add the value to the 24-bit block at the correct offset
+	        #codeBlock := #codeBlock OR SHL_DWORD(IN := #codeValue, N := INT_TO_UINT((3 - #j) * 6));
+	    END_FOR;
+	    
+	    // split the 24-bit number into three 8-bit bytes and append them to the decoded string
+	    #decodedString := CONCAT(IN1 := #decodedString, IN2 := DWORD_TO_CHAR(SHR(IN := #codeBlock, N := 16)));
+	    #decodedString := CONCAT(IN1 := #decodedString, IN2 := DWORD_TO_CHAR(SHR(IN := #codeBlock, N := 8)));
+	    #decodedString := CONCAT(IN1 := #decodedString, IN2 := DWORD_TO_CHAR(#codeBlock));
+	END_FOR;
+	
+	// remove the padding characters and output the decoded String
+	#OUT := LEFT(IN := #decodedString, L := LEN(#decodedString) - #paddingLength);
+	
+END_FUNCTION
+

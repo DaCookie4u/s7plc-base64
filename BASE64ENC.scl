@@ -1,0 +1,106 @@
+﻿FUNCTION "BASE64ENC" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      IN : String;
+   END_VAR
+
+   VAR_OUTPUT 
+      OUT : String;
+   END_VAR
+
+   VAR_TEMP 
+      nrOfBytes : Int;
+      base64chars : String;
+      decodedString : String;
+      encodedString : String;
+      padding : String[2];
+      codeBlock : DWord;
+      codeArray : Array[0..3] of Byte;
+      i : Int;
+   END_VAR
+
+
+BEGIN
+	(*
+	
+	 ██████╗  █████╗ ███████╗███████╗ ██████╗ ██╗  ██╗              ██████╗ ██╗      ██████╗
+	 ██╔══██╗██╔══██╗██╔════╝██╔════╝██╔════╝ ██║  ██║              ██╔══██╗██║     ██╔════╝
+	 ██████╔╝███████║███████╗█████╗  ███████╗ ███████║    █████╗    ██████╔╝██║     ██║     
+	 ██╔══██╗██╔══██║╚════██║██╔══╝  ██╔═══██╗╚════██║    ╚════╝    ██╔═══╝ ██║     ██║     
+	 ██████╔╝██║  ██║███████║███████╗╚██████╔╝     ██║              ██║     ███████╗╚██████╗
+	 ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝      ╚═╝              ╚═╝     ╚══════╝ ╚═════╝
+	 
+	 MIT License
+	 
+	 Copyright (c) 2022 Jesse Schlüter (jesse@helix360.de)
+	 
+	 Permission is hereby granted, free OF charge, TO Any person obtaining a copy
+	 OF this software AND associated documentation files (the "Software"), TO deal
+	 in the Software without restriction, including without limitation the rights
+	 TO use, copy, modify, merge, publish, distribute, sublicense, AND/OR sell
+	 copies OF the software, AND TO permit persons TO whom the software is
+	 furnished TO DO so, subject TO the following conditions:
+	 
+	 the above copyright notice AND this permission notice shall be included in all
+	 copies OR substantial portions OF the software.
+	 
+	 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF Any KIND, EXPRESS OR
+	 IMPLIED, INCLUDING BUT NOT LIMITED TO the WARRANTIES OF MERCHANTABILITY,
+	 FITNESS FOR a PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR Any CLAIM, DAMAGES OR OTHER
+	 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	 OUT OF OR #IN CONNECTION WITH the software OR THE USE OR OTHER DEALINGS IN THE
+	 SOFTWARE. 
+	*)
+	
+	// read input string
+	#decodedString := #IN;
+	
+	// initialize variables
+	#base64chars := 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	#encodedString := '';
+	#padding := '';
+	#nrOfBytes := LEN(#IN);
+	
+	// apply padding if string is not a multiple of 3
+	#i := #nrOfBytes MOD 3;
+	IF #i > 0 THEN
+	    FOR #i := #i TO 2 DO
+	        #padding := CONCAT(IN1 := #padding, IN2 := '=');
+	        #decodedString := CONCAT(IN1 := #decodedString, IN2 := '$00');
+	    END_FOR;
+	END_IF;
+	
+	// loop through the string three characters at a time
+	FOR #i := 0 TO #nrOfBytes - 1 BY 3 DO
+	    // add a line break every 76 output characters, according to the MIME specs
+	    IF #i > 0 AND (#i / 3 * 4 MOD 76) = 0 THEN
+	        #encodedString := CONCAT(IN1 := #encodedString, IN2 := '$R$L');
+	    END_IF;
+	    
+	    // assemble the current three characters into a single 24-bit block
+	    #codeBlock := SHL_DWORD(IN := #decodedString[#i + 1], N := 16)
+	    OR SHL_WORD(IN := BYTE_TO_WORD(#decodedString[#i + 2]), N := 8)
+	    OR CHAR_TO_DWORD(#decodedString[#i + 3]);
+	    
+	    // turn the 24-bit block into three 6-bit variables
+	    #codeArray[0] := DWORD_TO_BYTE(SHR(IN := #codeBlock, N := 18)) AND 16#3F;
+	    #codeArray[1] := DWORD_TO_BYTE(SHR(IN := #codeBlock, N := 12)) AND 16#3F;
+	    #codeArray[2] := DWORD_TO_BYTE(SHR(IN := #codeBlock, N := 6)) AND 16#3F;
+	    #codeArray[3] := DWORD_TO_BYTE(#codeBlock) AND 16#3F;
+	    
+	    // append the corresponding character from the character list to the encoded string
+	    #encodedString := CONCAT(IN1 := #encodedString, IN2 := #base64chars[#codeArray[0] + 1]);
+	    #encodedString := CONCAT(IN1 := #encodedString, IN2 := #base64chars[#codeArray[1] + 1]);
+	    #encodedString := CONCAT(IN1 := #encodedString, IN2 := #base64chars[#codeArray[2] + 1]);
+	    #encodedString := CONCAT(IN1 := #encodedString, IN2 := #base64chars[#codeArray[3] + 1]);
+	END_FOR;
+	
+	// remove the zero pad at the end of the encoded string
+	#encodedString := LEFT(IN := #encodedString, L := LEN(#encodedString) - LEN(#padding));
+	// append the padding characters and output the result
+	#OUT := CONCAT(IN1 := #encodedString, IN2 := #padding);
+	
+END_FUNCTION
+
